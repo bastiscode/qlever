@@ -21,6 +21,7 @@ add_library(sparqlExpressions
         CountStarExpression.cpp
         PrefilterExpressionIndex.cpp
         GeoExpression.cpp
+        EmbeddingExpression.cpp
         BlankNodeExpression.cpp
         GroupConcatExpression.cpp)
 

@@ -49,7 +49,7 @@ void testForVocabType(VocabularyType::Enum vocabType) {
       3);
 
   EXPECT_EQ(vocab.isGeoInfoAvailable(),
-            vocabType == VocabularyType::Enum::OnDiskCompressedGeoSplit);
+            vocabType == VocabularyType::Enum::OnDiskCompressedSplit);
 }
 }  // namespace
 

@@ -59,7 +59,7 @@ namespace {
 using namespace splitVocabTestHelpers;
 using namespace ad_utility;
 const VocabularyType geoSplitVocabType{
-    VocabularyType::Enum::OnDiskCompressedGeoSplit};
+    VocabularyType::Enum::OnDiskCompressedSplit};
 
 // _____________________________________________________________________________
 TEST(Vocabulary, SplitGeoVocab) {
@@ -301,15 +301,17 @@ TEST(Vocabulary, SplitVocabularyItemAt) {
   ASSERT_EQ(v[VocabIndex::make(2)], "ba");
   ASSERT_EQ(v[VocabIndex::make(3)], "car");
 
-  // Out of range indices
+  // Out of range indices. Note: The active type is the combined three-way
+  // split (`regular | geo | embedding`), so the marker uses two bits and the
+  // geometry marker (1) sits at bit 58, not 59.
   EXPECT_ANY_THROW(v[VocabIndex::make(42)]);
-  EXPECT_ANY_THROW(v[VocabIndex::make((1ULL << 59) | 42)]);
+  EXPECT_ANY_THROW(v[VocabIndex::make((1ULL << 58) | 42)]);
 
-  auto idx = VocabIndex::make(1ULL << 59);
+  auto idx = VocabIndex::make(1ULL << 58);
   ASSERT_EQ(v[idx],
             "\"LINESTRING(1 2, 3 4)\""
             "^^<http://www.opengis.net/ont/geosparql#wktLiteral>");
-  idx = VocabIndex::make(static_cast<uint64_t>(1) << 59 | 1);
+  idx = VocabIndex::make(static_cast<uint64_t>(1) << 58 | 1);
   ASSERT_EQ(v[idx],
             "\"POLYGON((1 2, 3 4))\""
             "^^<http://www.opengis.net/ont/geosparql#wktLiteral>");
@@ -317,9 +319,11 @@ TEST(Vocabulary, SplitVocabularyItemAt) {
 
 // _____________________________________________________________________________
 TEST(Vocabulary, SplitVocabularyWordWriterAndGetPosition) {
-  // The word writer in the Vocabulary class runs the SplitGeoVocabulary word
-  // writer. Its task is to split words to two different vocabularies for geo
-  // and non-geo words. This split is tested here.
+  // The word writer in the Vocabulary class runs the combined `SplitSpecial`
+  // word writer. Its task is to split words to different vocabularies for geo,
+  // embedding and other words. This split is tested here. The active type is the
+  // three-way split, so the marker uses two bits and the geometry marker (1)
+  // sits at bit 58.
   RdfsVocabulary vocabulary;
   vocabulary.resetToType(geoSplitVocabType);
   auto wordCallback = vocabulary.makeWordWriterPtr("vocTest7.dat");
@@ -332,14 +336,14 @@ TEST(Vocabulary, SplitVocabularyWordWriterAndGetPosition) {
       (*wordCallback)("\"LINESTRING(1 2, 3 4)\""
                       "^^<http://www.opengis.net/ont/geosparql#wktLiteral>",
                       true),
-      (1ULL << 59));
+      (1ULL << 58));
   ASSERT_EQ((*wordCallback)("\"ba\"", true), 2);
   ASSERT_EQ((*wordCallback)("\"car\"@en", true), 3);
   ASSERT_EQ(
       (*wordCallback)("\"POLYGON((1 2, 3 4))\""
                       "^^<http://www.opengis.net/ont/geosparql#wktLiteral>",
                       true),
-      (1ULL << 59) | 1);
+      (1ULL << 58) | 1);
 
   wordCallback->finish();
 
@@ -364,8 +368,8 @@ TEST(Vocabulary, SplitVocabularyWordWriterAndGetPosition) {
       vocabulary.getId("\"LINESTRING(1 2, 3 4)\""
                        "^^<http://www.opengis.net/ont/geosparql#wktLiteral>",
                        &idx));
-  ASSERT_EQ(idx.get(), 1ULL << 59);
-  ASSERT_EQ(vocabulary[VocabIndex::make(1ULL << 59)],
+  ASSERT_EQ(idx.get(), 1ULL << 58);
+  ASSERT_EQ(vocabulary[VocabIndex::make(1ULL << 58)],
             "\"LINESTRING(1 2, 3 4)\""
             "^^<http://www.opengis.net/ont/geosparql#wktLiteral>");
 
@@ -373,8 +377,8 @@ TEST(Vocabulary, SplitVocabularyWordWriterAndGetPosition) {
       vocabulary.getId("\"POLYGON((1 2, 3 4))\""
                        "^^<http://www.opengis.net/ont/geosparql#wktLiteral>",
                        &idx));
-  ASSERT_EQ(idx.get(), (1ULL << 59) | 1);
-  ASSERT_EQ(vocabulary[VocabIndex::make((1ULL << 59) | 1)],
+  ASSERT_EQ(idx.get(), (1ULL << 58) | 1);
+  ASSERT_EQ(vocabulary[VocabIndex::make((1ULL << 58) | 1)],
             "\"POLYGON((1 2, 3 4))\""
             "^^<http://www.opengis.net/ont/geosparql#wktLiteral>");
 
@@ -401,22 +405,22 @@ TEST(Vocabulary, SplitVocabularyWordWriterAndGetPosition) {
   auto [l4, u4] = vocabulary.getPositionOfWord(
       "\"POLYGON((0 0, 3 4))\""
       "^^<http://www.opengis.net/ont/geosparql#wktLiteral>");
-  ASSERT_EQ(l4, VocabIndex::make((1ULL << 59) | 1));
-  ASSERT_EQ(u4, VocabIndex::make((1ULL << 59) | 1));
+  ASSERT_EQ(l4, VocabIndex::make((1ULL << 58) | 1));
+  ASSERT_EQ(u4, VocabIndex::make((1ULL << 58) | 1));
 
   //  - Non-existing split word, at the end
   auto [l5, u5] = vocabulary.getPositionOfWord(
       "\"POLYGON((9 9, 9 9))\""
       "^^<http://www.opengis.net/ont/geosparql#wktLiteral>");
-  ASSERT_EQ(l5, VocabIndex::make((1ULL << 59) | 2));
-  ASSERT_EQ(u5, VocabIndex::make((1ULL << 59) | 2));
+  ASSERT_EQ(l5, VocabIndex::make((1ULL << 58) | 2));
+  ASSERT_EQ(u5, VocabIndex::make((1ULL << 58) | 2));
 
   //  - Existing split word
   auto [l6, u6] = vocabulary.getPositionOfWord(
       "\"POLYGON((1 2, 3 4))\""
       "^^<http://www.opengis.net/ont/geosparql#wktLiteral>");
-  ASSERT_EQ(l6, VocabIndex::make((1ULL << 59) | 1));
-  ASSERT_EQ(u6, VocabIndex::make((1ULL << 59) | 2));
+  ASSERT_EQ(l6, VocabIndex::make((1ULL << 58) | 1));
+  ASSERT_EQ(u6, VocabIndex::make((1ULL << 58) | 2));
 
   //  - Non-existing prefix of an existing split word
   auto [l7, u7] = vocabulary.getPositionOfWord("\"POLYGON((1 2, 3 4))");

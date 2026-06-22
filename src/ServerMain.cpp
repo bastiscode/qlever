@@ -203,6 +203,13 @@ int main(int argc, char** argv) {
       "Default is INFO. The compile-time level (CMake -DLOGLEVEL=...) applies "
       "as an upper bound — messages above it are never emitted regardless of "
       "this setting.");
+  add("embedding-vector-access",
+      optionFactory.getProgramOption<&RuntimeParameters::embeddingVectorAccess_>(),
+      "How embedding vectors are read from the `.embvec` sidecar: `pread` "
+      "(default), `mmap` (zero-copy memory map), or `in-memory` (load the whole "
+      "blob into RAM). Read once when the index is loaded, so it must be set "
+      "here at startup (changing it via the runtime-parameters endpoint later "
+      "has no effect).");
   po::variables_map optionsMap;
 
   try {

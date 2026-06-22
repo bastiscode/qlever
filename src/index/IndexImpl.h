@@ -23,6 +23,7 @@
 #include "index/ConstantsIndexBuilding.h"
 #include "index/DeltaTriples.h"
 #include "index/DocsDB.h"
+#include "index/EmbeddingSetRegistry.h"
 #include "index/EncodedIriManager.h"
 #include "index/ExternalSortFunctors.h"
 #include "index/GraphNameManager.h"
@@ -120,6 +121,10 @@ class IndexImpl {
   nlohmann::json configurationJson_;
   Index::Vocab vocab_;
   Index::TextVocab textVocab_;
+  // Metadata of the declared embedding sets, assembled at index load time by
+  // scanning the `qle:EmbeddingSet` declarations (not persisted). See
+  // `buildEmbeddingSetRegistry`.
+  EmbeddingSetRegistry embeddingSetRegistry_;
   EncodedIriManager encodedIriManager_;
   ScoreData scoreData_;
 
@@ -251,6 +256,12 @@ class IndexImpl {
 
   const auto& getVocab() const { return vocab_; };
   auto& getNonConstVocabForTesting() { return vocab_; }
+
+  // The embedding-set metadata assembled at load time (see
+  // `buildEmbeddingSetRegistry`). Empty if the index declares no embedding sets.
+  const EmbeddingSetRegistry& getEmbeddingSetRegistry() const {
+    return embeddingSetRegistry_;
+  }
 
   const ad_utility::AllocatorWithLimit<Id>& allocator() const {
     return allocator_;
@@ -741,6 +752,14 @@ class IndexImpl {
 
   void writeConfiguration() const;
   void readConfiguration();
+
+  // Scan the loaded permutations for `qle:EmbeddingSet` declarations and
+  // populate `embeddingSetRegistry_`, running the strict validation rules of
+  // `docs/embedding-storage-spec.md` §7 (all metadata fields present, supported
+  // precision/metric). Called at the end of `createFromOnDiskIndex`. Fails
+  // loudly (throws) on an invalid declaration. A no-op if no permutations are
+  // loaded.
+  void buildEmbeddingSetRegistry();
 
   // initialize the index-build-time settings for the vocabulary
   void readIndexBuilderSettingsFromFile();

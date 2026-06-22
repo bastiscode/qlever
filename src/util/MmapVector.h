@@ -389,6 +389,13 @@ class MmapVectorView : private MmapVector<T> {
     open(filename, pattern);
   }
 
+  // Re-issue the `madvise` access-pattern hint on the live mapping, e.g. to
+  // switch between random point-lookups and a sequential scan without
+  // reopening.
+  void setAccessPattern(AccessPattern pattern) {
+    MmapVector<T>::setAccessPattern(pattern);
+  }
+
   // explicitly close the vector to an uninitialized state and free the
   // associated resources
   void close();

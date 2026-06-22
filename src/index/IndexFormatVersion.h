@@ -39,8 +39,12 @@ struct IndexFormatVersion {
 
 // The actual index version. Change it once the binary format of the index
 // changes.
+// TODO<swalter> Update `prNumber_` to the actual PR number once it exists. The
+// embedding feature replaced the geo-only `SplitVocabulary` with a combined
+// `regular | geo | embedding` split (new vocabulary-type name and an additional
+// `.embvec` sidecar), which is a breaking change of the on-disk format.
 inline const IndexFormatVersion& indexFormatVersion{
-    1572, DateYearOrDuration{Date{2024, 10, 22}}};
+    2946, DateYearOrDuration{Date{2026, 6, 15}}};
 }  // namespace qlever
 
 #endif  // QLEVER_SRC_INDEX_INDEXFORMATVERSION_H

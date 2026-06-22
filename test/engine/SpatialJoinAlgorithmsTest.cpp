@@ -1769,7 +1769,7 @@ TEST(SpatialJoin, GetPolylineGeometryTypeCheck) {
       "^^<http://www.opengis.net/ont/geosparql#wktLiteral> .\n";
 
   auto vocabType =
-      ad_utility::VocabularyType::fromString("on-disk-compressed-geo-split");
+      ad_utility::VocabularyType::fromString("on-disk-compressed-split");
   auto qec = ad_utility::testing::getQec(kb, vocabType);
   auto scan = buildIndexScan(qec, {"?s", std::string{"<asWKT>"}, "?geo"});
   auto result = scan->getResult();

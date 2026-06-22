@@ -16,6 +16,7 @@
 #include "global/Constants.h"
 #include "global/Id.h"
 #include "global/ValueId.h"
+#include "rdfTypes/EmbeddingVector.h"
 #include "rdfTypes/GeoPoint.h"
 #include "rdfTypes/GeometryInfo.h"
 #include "util/ConstexprSmallString.h"
@@ -420,6 +421,24 @@ struct GeoPointOrWktValueGetter : Mixin<GeoPointOrWktValueGetter> {
       ValueId id, const EvaluationContext*) const;
   std::optional<ad_utility::GeoPointOrWkt> operator()(
       const LiteralOrIri&, const EvaluationContext*) const;
+};
+
+// Value getter for embedding vectors, used by the `qlef:distance` expression. It
+// resolves an operand to its decoded `std::vector<float>`, or `std::nullopt` if
+// the operand is not an embedding-vector literal (the caller turns that into a
+// strict query error). Mirrors `GeometryInfoValueGetter`: for a stored
+// `VocabIndex` it first tries the precomputed `EmbeddingVocabulary` sidecar
+// (`Vocabulary::getEmbedding`), and falls back to fetching and parsing the
+// literal string when the index was not built with a split vocabulary — so the
+// sidecar is a performance optimization, not a requirement. An inline query
+// vector (`"[…]"^^qle:fp32-vector` written in the query) is parsed directly.
+struct EmbeddingValueGetter : Mixin<EmbeddingValueGetter> {
+  // A `MaybeOwnedVector`, so the sidecar fast path can borrow zero-copy from the
+  // `mmap`/`in-memory` storage while the parse/`pread` paths own their copy.
+  using Value = std::optional<ad_utility::MaybeOwnedVector>;
+  using Mixin<EmbeddingValueGetter>::operator();
+  Value operator()(ValueId id, const EvaluationContext*) const;
+  Value operator()(const LiteralOrIri&, const EvaluationContext*) const;
 };
 
 // `LanguageTagValueGetter` returns an `std::optional<std::string>` object

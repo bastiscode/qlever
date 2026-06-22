@@ -111,7 +111,7 @@ TYPED_TEST(GeoVocabularyUnderlyingVocabTypedTest, TypedTest) {
 // _____________________________________________________________________________
 TEST(GeoVocabularyTest, VocabularyGetGeoInfoFromUnderlyingGeoVocab) {
   const VocabularyType geoSplitVocabType{
-      VocabularyType::Enum::OnDiskCompressedGeoSplit};
+      VocabularyType::Enum::OnDiskCompressedSplit};
   const VocabularyType nonGeoVocabType{VocabularyType::Enum::OnDiskCompressed};
 
   // Generate test vocabulary
@@ -155,7 +155,7 @@ TEST(GeoVocabularyTest, VocabularyGetGeoInfoFromUnderlyingGeoVocab) {
 // _____________________________________________________________________________
 TEST(GeoVocabularyTest, InvalidGeometryInfoVersion) {
   const VocabularyType geoSplitVocabType{
-      VocabularyType::Enum::OnDiskCompressedGeoSplit};
+      VocabularyType::Enum::OnDiskCompressedSplit};
 
   // Generate test vocabulary
   RdfsVocabulary vocabulary;

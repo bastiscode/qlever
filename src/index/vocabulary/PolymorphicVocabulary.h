@@ -9,7 +9,9 @@
 #include <absl/strings/str_cat.h>
 #include <absl/strings/str_join.h>
 
+#include <optional>
 #include <variant>
+#include <vector>
 
 #include "backports/type_traits.h"
 #include "index/vocabulary/CompressedVocabulary.h"
@@ -42,10 +44,10 @@ class PolymorphicVocabulary {
   using OnDiskUncompressed = VocabularyInternalExternal;
   using InMemoryCompressed = CompressedVocabulary<InMemoryUncompressed>;
   using OnDiskCompressed = CompressedVocabulary<OnDiskUncompressed>;
-  using OnDiskCompressedGeoSplit = SplitGeoVocabulary<OnDiskCompressed>;
+  using OnDiskCompressedSplit = SplitSpecialVocabulary<OnDiskCompressed>;
   using Variant =
       std::variant<InMemoryUncompressed, OnDiskUncompressed, OnDiskCompressed,
-                   InMemoryCompressed, OnDiskCompressedGeoSplit>;
+                   InMemoryCompressed, OnDiskCompressedSplit>;
 
   // In this variant we store the actual vocabulary.
   Variant vocab_;
@@ -153,6 +155,40 @@ class PolymorphicVocabulary {
             return vocab.isGeoInfoAvailable();
           } else {
             static_assert(NeverProvidesGeometryInfo<T>);
+            return false;
+          }
+        },
+        vocab_);
+  }
+
+  // Retrieve the decoded embedding vector from an underlying vocabulary, if it
+  // is an `EmbeddingVocabulary`.
+  std::optional<ad_utility::MaybeOwnedVector> getEmbedding(
+      uint64_t index) const {
+    return std::visit(
+        [&](const auto& vocab) -> std::optional<ad_utility::MaybeOwnedVector> {
+          using T = std::decay_t<decltype(vocab)>;
+          // For more details, please see the definition of these concepts
+          // in `VocabularyConstraints.h`.
+          if constexpr (MaybeProvidesEmbedding<T>) {
+            return vocab.getEmbedding(index);
+          } else {
+            static_assert(NeverProvidesEmbedding<T>);
+            return std::nullopt;
+          }
+        },
+        vocab_);
+  };
+
+  // Checks if any of the underlying vocabularies is an `EmbeddingVocabulary`.
+  bool isEmbeddingAvailable() const {
+    return std::visit(
+        [](const auto& vocab) {
+          using T = std::decay_t<decltype(vocab)>;
+          if constexpr (MaybeProvidesEmbedding<T>) {
+            return vocab.isEmbeddingAvailable();
+          } else {
+            static_assert(NeverProvidesEmbedding<T>);
             return false;
           }
         },

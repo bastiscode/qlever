@@ -12,6 +12,7 @@
 
 #include "backports/three_way_comparison.h"
 #include "global/Id.h"
+#include "index/EmbeddingSetRegistry.h"
 #include "index/GraphNameManager.h"
 #include "index/InputFileSpecification.h"
 #include "index/Permutation.h"
@@ -108,6 +109,10 @@ class Index {
   using Vocab = RdfsVocabulary;
   const Vocab& getVocab() const;
   const EncodedIriManager& encodedIriManager() const;
+
+  // The embedding-set metadata assembled at index load time (empty if the index
+  // declares no embedding sets). Used by the `qle:distance` expression.
+  const EmbeddingSetRegistry& getEmbeddingSetRegistry() const;
   Vocab& getNonConstVocabForTesting();
 
   using TextVocab = TextVocabulary;

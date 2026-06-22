@@ -23,7 +23,7 @@ enum struct VocabularyTypeEnum {
   OnDiskUncompressed,
   InMemoryCompressed,
   OnDiskCompressed,
-  OnDiskCompressedGeoSplit
+  OnDiskCompressedSplit
 };
 
 }
@@ -39,12 +39,12 @@ class VocabularyType
            {Enum::OnDiskUncompressed, "on-disk-uncompressed"},
            {Enum::InMemoryCompressed, "in-memory-compressed"},
            {Enum::OnDiskCompressed, "on-disk-compressed"},
-           {Enum::OnDiskCompressedGeoSplit, "on-disk-compressed-geo-split"}}};
+           {Enum::OnDiskCompressedSplit, "on-disk-compressed-split"}}};
   static const VocabularyType InMemoryUncompressed;
   static const VocabularyType OnDiskUncompressed;
   static const VocabularyType InMemoryCompressed;
   static const VocabularyType OnDiskCompressed;
-  static const VocabularyType OnDiskCompressedGeoSplit;
+  static const VocabularyType OnDiskCompressedSplit;
 
   static constexpr std::string_view typeName() { return "vocabulary type"; }
 
@@ -59,8 +59,8 @@ const inline VocabularyType VocabularyType::InMemoryCompressed{
     VocabularyType::Enum::InMemoryCompressed};
 const inline VocabularyType VocabularyType::OnDiskCompressed{
     VocabularyType::Enum::OnDiskCompressed};
-const inline VocabularyType VocabularyType::OnDiskCompressedGeoSplit{
-    VocabularyType::Enum::OnDiskCompressedGeoSplit};
+const inline VocabularyType VocabularyType::OnDiskCompressedSplit{
+    VocabularyType::Enum::OnDiskCompressedSplit};
 }  // namespace ad_utility
 
 #endif  // QLEVER_SRC_INDEX_VOCABULARY_VOCABULARYTYPE_H

@@ -13,6 +13,7 @@
 #include "global/ValueId.h"
 #include "index/ExportIds.h"
 #include "parser/NormalizedString.h"
+#include "rdfTypes/EmbeddingVector.h"
 #include "rdfTypes/GeometryInfo.h"
 #include "rdfTypes/Literal.h"
 #include "util/Conversions.h"
@@ -456,6 +457,58 @@ std::optional<ad_utility::GeoPointOrWkt> GeoPointOrWktValueGetter::operator()(
   if (litOrIri.isLiteral() && litOrIri.hasDatatype() &&
       asStringViewUnsafe(litOrIri.getDatatype()) == GEO_WKT_LITERAL) {
     return litOrIri.toStringRepresentation();
+  }
+  return std::nullopt;
+};
+
+//______________________________________________________________________________
+EmbeddingValueGetter::Value EmbeddingValueGetter::operator()(
+    ValueId id, const EvaluationContext* context) const {
+  using enum Datatype;
+  switch (id.getDatatype()) {
+    case VocabIndex:
+    case LocalVocabIndex: {
+      // Fast path: the precomputed vector from the split sidecar (only the
+      // global vocabulary has one). Borrowed zero-copy for the `mmap`/
+      // `in-memory` backends.
+      if (id.getDatatype() == VocabIndex) {
+        auto stored = context->_qec.getIndex().getVocab().getEmbedding(
+            id.getVocabIndex());
+        if (stored.has_value()) {
+          return stored;
+        }
+      }
+      // Fallback (works with any vocab type / local vocab): fetch the literal
+      // and parse it.
+      auto lit = ql::exportIds::getLiteralOrIriFromVocabIndex(
+          context->_qec.getIndex(), id, context->_localVocab);
+      return (*this)(lit, context);
+    }
+    case Bool:
+    case Int:
+    case Double:
+    case Date:
+    case GeoPoint:
+    case Undefined:
+    case TextRecordIndex:
+    case WordVocabIndex:
+    case BlankNodeIndex:
+    case EncodedVal:
+      return std::nullopt;
+  }
+  AD_FAIL();
+}
+
+//______________________________________________________________________________
+EmbeddingValueGetter::Value EmbeddingValueGetter::operator()(
+    const LiteralOrIri& litOrIri, const EvaluationContext*) const {
+  if (litOrIri.isLiteral() && litOrIri.hasDatatype() &&
+      asStringViewUnsafe(litOrIri.getDatatype()) == EMBEDDING_FP32_DATATYPE) {
+    auto parsed = ad_utility::parseFloatVectorArrayBody(
+        asStringViewUnsafe(litOrIri.getContent()));
+    if (parsed.has_value()) {
+      return ad_utility::MaybeOwnedVector{std::move(parsed).value()};
+    }
   }
   return std::nullopt;
 };

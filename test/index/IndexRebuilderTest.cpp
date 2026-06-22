@@ -52,7 +52,7 @@ std::vector<std::string> getVocabSuffixesForType(
     case OnDiskCompressed:
       return {".codebooks", ".words.external", ".words.external.offsets",
               ".words.internal", ".words.internal.ids"};
-    case OnDiskCompressedGeoSplit:
+    case OnDiskCompressedSplit:
       return {".codebooks",
               ".words.external",
               ".words.external.offsets",
@@ -63,7 +63,14 @@ std::vector<std::string> getVocabSuffixesForType(
               ".geometry.words.external",
               ".geometry.words.external.offsets",
               ".geometry.words.internal",
-              ".geometry.words.internal.ids"};
+              ".geometry.words.internal.ids",
+              ".embedding.codebooks",
+              ".embedding.embvec",
+              ".embedding.embvec.idx",
+              ".embedding.words.external",
+              ".embedding.words.external.offsets",
+              ".embedding.words.internal",
+              ".embedding.words.internal.ids"};
     default:
       AD_FAIL();
   }

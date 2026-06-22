@@ -131,6 +131,10 @@ constexpr inline std::string_view CACHED_RESULT_WITH_NAME_PREFIX =
 
 constexpr inline std::pair<std::string_view, std::string_view> GEOF_PREFIX = {
     "geof:", "http://www.opengis.net/def/function/geosparql/"};
+// The embedding expression functions (e.g. `qlef:distance`), dispatched by
+// prefix match just like `geof:`. See `docs/embedding-query-spec.md`.
+constexpr inline std::pair<std::string_view, std::string_view> QLEF_PREFIX = {
+    "qlef:", "http://qlever.cs.uni-freiburg.de/embeddings/functions/"};
 constexpr inline std::pair<std::string_view, std::string_view> MATH_PREFIX = {
     "math:", "http://www.w3.org/2005/xpath-functions/math#"};
 constexpr inline std::pair<std::string_view, std::string_view> XSD_PREFIX = {
@@ -222,6 +226,86 @@ static constexpr std::string_view GEO_LITERAL_SUFFIX =
                                 string_constants::detail::closeAngle>();
 
 constexpr std::string_view SF_PREFIX = "http://www.opengis.net/ont/sf#";
+
+// QLever-owned namespace for embedding-related RDF terms (the per-set metadata
+// vocabulary and the vector datatypes, all flat under prefix `qle:`).
+// Deliberately **not** under `builtin-functions/`: IRIs in that namespace are
+// treated as QLever-internal, and any triple touching one is dropped during
+// index building (see `isQleverInternalTriple` in `IndexImpl.cpp`). That would
+// make embedding-set declarations invisible to the load-time
+// `EmbeddingSetRegistry` scan. Terms here are ordinary RDF instead: they survive
+// index building and are visible to queries, like any other input triple.
+//
+// This mirrors GeoSPARQL, which keeps its datatype (`geo:wktLiteral`),
+// properties (`geo:asWKT`) and classes flat in one namespace and separates only
+// its *functions* (`geof:`). Likewise the query-time embedding expression
+// function lives in a sibling `functions/` namespace (`qlef:distance`, wired
+// into the function-dispatch table when implemented) — not here.
+constexpr inline std::string_view QLEVER_EMBEDDINGS_PREFIX_URL =
+    "http://qlever.cs.uni-freiburg.de/embeddings/";
+// Make a full `<...>` IRI in the embeddings namespace from the given suffixes
+// (mirrors `makeQleverInternalIriConst`).
+template <const std::string_view&... suffixes>
+constexpr std::string_view makeEmbeddingIriConst() {
+  using namespace string_constants::detail;
+  return ad_utility::constexprStrCat<openAngle, QLEVER_EMBEDDINGS_PREFIX_URL,
+                                     suffixes..., closeAngle>();
+}
+
+// Datatype IRIs for native embedding vectors (prefix `qle:`, alongside the
+// metadata vocabulary). The MVP supports only `fp32-vector` (IEEE-754 binary32);
+// further precisions (`bf16-vector`, ...) are future additions that share the
+// same vocabulary bucket.
+namespace string_constants::detail {
+constexpr inline std::string_view embeddings_fp32_vector = "fp32-vector";
+}  // namespace string_constants::detail
+constexpr inline std::string_view EMBEDDING_FP32_DATATYPE =
+    ad_utility::constexprStrCat<QLEVER_EMBEDDINGS_PREFIX_URL,
+                                string_constants::detail::embeddings_fp32_vector>();
+// The serialized suffix of an `fp32-vector` literal, i.e. `"^^<...fp32-vector>`.
+// A literal is routed to the `EmbeddingVocabulary` iff it starts with `"` and
+// ends with this suffix (mirrors `GEO_LITERAL_SUFFIX`).
+static constexpr std::string_view EMBEDDING_FP32_LITERAL_SUFFIX =
+    ad_utility::constexprStrCat<string_constants::detail::geo_literal_prefix,
+                                EMBEDDING_FP32_DATATYPE,
+                                string_constants::detail::closeAngle>();
+
+// Metadata vocabulary for embedding sets (see `docs/embedding-storage-spec.md`
+// §3), at the root of the embeddings namespace (prefix `qle:`, full `<...>` IRI
+// form). The user-chosen predicate that links a subject to its vector *is* the
+// embedding-set IRI; its metadata hangs off that IRI via these QLever-defined
+// terms. The `EmbeddingSetRegistry` scans these at index load time.
+namespace string_constants::detail {
+constexpr inline std::string_view embeddings_set = "EmbeddingSet";
+constexpr inline std::string_view embeddings_dimension = "dimension";
+constexpr inline std::string_view embeddings_precision = "precision";
+constexpr inline std::string_view embeddings_metric = "metric";
+constexpr inline std::string_view embeddings_model = "model";
+constexpr inline std::string_view embeddings_normalized = "normalized";
+}  // namespace string_constants::detail
+// The class IRI declaring a predicate to be an embedding set (`a
+// qle:EmbeddingSet`).
+constexpr inline std::string_view EMBEDDING_SET_IRI =
+    makeEmbeddingIriConst<string_constants::detail::embeddings_set>();
+// The mandatory per-set metadata predicates.
+constexpr inline std::string_view EMBEDDING_DIMENSION_IRI =
+    makeEmbeddingIriConst<string_constants::detail::embeddings_dimension>();
+constexpr inline std::string_view EMBEDDING_PRECISION_IRI =
+    makeEmbeddingIriConst<string_constants::detail::embeddings_precision>();
+constexpr inline std::string_view EMBEDDING_METRIC_IRI =
+    makeEmbeddingIriConst<string_constants::detail::embeddings_metric>();
+constexpr inline std::string_view EMBEDDING_MODEL_IRI =
+    makeEmbeddingIriConst<string_constants::detail::embeddings_model>();
+constexpr inline std::string_view EMBEDDING_NORMALIZED_IRI =
+    makeEmbeddingIriConst<string_constants::detail::embeddings_normalized>();
+// The only supported precision for the MVP (strict).
+constexpr inline std::string_view EMBEDDING_PRECISION_FP32 = "fp32";
+// The supported `qle:metric` values for the MVP (strict). All four are computed
+// as an exact *distance* (smaller = closer); see `docs/embedding-query-spec.md`.
+constexpr inline std::string_view EMBEDDING_METRIC_COSINE = "cosine";
+constexpr inline std::string_view EMBEDDING_METRIC_L2 = "l2";
+constexpr inline std::string_view EMBEDDING_METRIC_SQUARED_L2 = "squared-l2";
+constexpr inline std::string_view EMBEDDING_METRIC_DOT_PRODUCT = "dot-product";
 
 constexpr inline std::string_view VOCAB_SUFFIX = ".vocabulary";
 constexpr inline std::string_view MMAP_FILE_SUFFIX = ".meta";

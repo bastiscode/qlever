@@ -7,6 +7,7 @@
 
 #include <algorithm>
 
+#include "rdfTypes/EmbeddingVector.h"
 #include "util/Log.h"
 #include "util/Parameters.h"
 
@@ -27,6 +28,11 @@ struct RuntimeParameters {
 
   using LogLevelParameter =
       ad_utility::Parameter<LogLevel, LogLevel::FromString, LogLevel::ToString>;
+
+  using EmbeddingVectorAccessParameter = ad_utility::Parameter<
+      ad_utility::EmbeddingVectorAccess,
+      ad_utility::EmbeddingVectorAccess::FromString,
+      ad_utility::EmbeddingVectorAccess::ToString>;
 
   // ___________________________________________________________________________
   // IMPORTANT NOTE: IF YOU ADD PARAMETERS BELOW, ALSO REGISTER THEM IN THE
@@ -177,6 +183,12 @@ struct RuntimeParameters {
   // compile-time level (CMake LOGLEVEL) still applies as an upper bound.
   LogLevelParameter logLevel_{LogLevel{ad_utility::detail::defaultLogLevel},
                               "log-level"};
+
+  // How `EmbeddingVocabulary` reads vectors out of the `.embvec` sidecar. Read
+  // once when the index is loaded (changing it at query time has no effect, as
+  // the vocabulary is already open). See `EmbeddingVectorAccess`.
+  EmbeddingVectorAccessParameter embeddingVectorAccess_{
+      ad_utility::EmbeddingVectorAccess::Pread, "embedding-vector-access"};
 
   // ___________________________________________________________________________
   // IMPORTANT NOTE: IF YOU ADD PARAMETERS ABOVE, ALSO REGISTER THEM IN THE

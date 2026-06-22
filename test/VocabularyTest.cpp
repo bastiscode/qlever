@@ -151,7 +151,7 @@ TEST(Vocabulary, IsGeoInfoAvailable) {
   ASSERT_FALSE(v2.isGeoInfoAvailable());
 
   RdfsVocabulary v3;
-  v3.resetToType(VocabularyType{OnDiskCompressedGeoSplit});
+  v3.resetToType(VocabularyType{OnDiskCompressedSplit});
   ASSERT_TRUE(v3.isGeoInfoAvailable());
 
   TextVocabulary v4;

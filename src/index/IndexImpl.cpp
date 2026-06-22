@@ -17,11 +17,15 @@
 #include "CompilationInfo.h"
 #include "backports/algorithm.h"
 #include "engine/AddCombinedRowToTable.h"
+#include "index/ExportIds.h"
 #include "index/Index.h"
 #include "index/IndexFormatVersion.h"
+#include "index/ScanSpecification.h"
 #include "index/VocabularyMerger.h"
+#include "parser/NormalizedString.h"
 #include "parser/ParallelParseBuffer.h"
 #include "parser/WordsAndDocsFileParser.h"
+#include "util/HashSet.h"
 #include "util/BatchedPipeline.h"
 #include "util/CachingMemoryResource.h"
 #include "util/CancellationHandle.h"
@@ -1072,6 +1076,142 @@ void IndexImpl::createFromOnDiskIndex(const std::string& onDiskBase,
     deltaTriples_.value().setFilenameForPersistentUpdatesAndReadFromDisk(
         onDiskBase + ".update-triples");
     graphNameManagerStateFile_ = onDiskBase + ".allocated-graphs-state";
+  }
+
+  // Assemble the embedding-set metadata from the loaded permutations (strictly
+  // validated; fails loudly on an invalid declaration).
+  buildEmbeddingSetRegistry();
+}
+
+// _____________________________________________________________________________
+void IndexImpl::buildEmbeddingSetRegistry() {
+  using ad_utility::triple_component::Iri;
+
+  // Nothing to scan if the permutations were not loaded.
+  if (pso_ == nullptr || pos_ == nullptr) {
+    return;
+  }
+
+  auto locatedTriplesState =
+      deltaTriplesManager().getCurrentLocatedTriplesSharedState();
+  const LocatedTriplesState& lts = *locatedTriplesState;
+  auto cancellationHandle =
+      std::make_shared<ad_utility::SharedCancellationHandle::element_type>();
+  Permutation::ColumnIndicesRef noAdditionalColumns{};
+
+  auto iri = [](std::string_view i) {
+    return TripleComponent{Iri::fromIriref(std::string{i})};
+  };
+
+  // Run a scan with the given (key-order) triple specification and return the
+  // resulting `IdTable` (only the unbound columns, in key order).
+  auto runScan = [&, this](const Permutation& permutation,
+                           ScanSpecificationAsTripleComponent tc) {
+    auto scanSpecification = tc.toScanSpecification(*this);
+    return permutation.scan(
+        permutation.getScanSpecAndBlocks(scanSpecification, lts),
+        noAdditionalColumns, cancellationHandle, lts);
+  };
+
+  // 1. Collect the subjects declared `a qle:EmbeddingSet`. In POS key order
+  //    (P, O, S) we fix P = rdf:type and O = qle:EmbeddingSet, leaving S; the
+  //    resulting table therefore has the set subjects in its single column.
+  std::string rdfType = absl::StrCat("<", RDF_PREFIX, "type>");
+  IdTable setSubjectsTable =
+      runScan(POS(), ScanSpecificationAsTripleComponent{
+                         iri(rdfType), iri(EMBEDDING_SET_IRI), std::nullopt});
+  if (setSubjectsTable.empty()) {
+    return;
+  }
+  ad_utility::HashSet<Id> setIds;
+  for (const auto& row : setSubjectsTable) {
+    setIds.insert(row[0]);
+  }
+
+  // 2. For each mandatory metadata predicate, scan PSO (key order P, S, O; we
+  //    fix P, leaving S and O) into a `subject -> object` map.
+  auto scanPredicate = [&](std::string_view predicateIri) {
+    ad_utility::HashMap<Id, Id> result;
+    IdTable table = runScan(
+        PSO(), ScanSpecificationAsTripleComponent{iri(predicateIri),
+                                                  std::nullopt, std::nullopt});
+    for (const auto& row : table) {
+      result.insert_or_assign(row[0], row[1]);
+    }
+    return result;
+  };
+  auto dimensionMap = scanPredicate(EMBEDDING_DIMENSION_IRI);
+  auto precisionMap = scanPredicate(EMBEDDING_PRECISION_IRI);
+  auto metricMap = scanPredicate(EMBEDDING_METRIC_IRI);
+  auto modelMap = scanPredicate(EMBEDDING_MODEL_IRI);
+  auto normalizedMap = scanPredicate(EMBEDDING_NORMALIZED_IRI);
+
+  LocalVocab localVocab;
+  auto readStringObject = [&, this](Id id) -> std::string {
+    auto literal = ql::exportIds::idToLiteral(*this, id, localVocab, false);
+    AD_CONTRACT_CHECK(literal.has_value(),
+                      "An embedding-set metadata value was expected to be a "
+                      "string literal");
+    return std::string{asStringViewUnsafe(literal->getContent())};
+  };
+
+  // 3. Assemble and strictly validate each set's metadata (storage spec §7).
+  for (Id setId : setIds) {
+    std::string setName{indexToString(setId.getVocabIndex())};
+    auto require = [&setName](const ad_utility::HashMap<Id, Id>& map, Id key,
+                              std::string_view field) -> Id {
+      auto it = map.find(key);
+      if (it == map.end()) {
+        throw std::runtime_error{absl::StrCat(
+            "The embedding set ", setName, " is missing the mandatory field ",
+            field, ". Every `qle:EmbeddingSet` must declare qle:dimension, "
+            "qle:precision, qle:metric, qle:model and qle:normalized.")};
+      }
+      return it->second;
+    };
+
+    Id dimensionId = require(dimensionMap, setId, "qle:dimension");
+    if (dimensionId.getDatatype() != Datatype::Int || dimensionId.getInt() <= 0) {
+      throw std::runtime_error{absl::StrCat(
+          "The embedding set ", setName,
+          " has an invalid qle:dimension; expected a positive integer.")};
+    }
+    auto dimension = static_cast<uint64_t>(dimensionId.getInt());
+
+    std::string precision =
+        readStringObject(require(precisionMap, setId, "qle:precision"));
+    if (precision != EMBEDDING_PRECISION_FP32) {
+      throw std::runtime_error{absl::StrCat(
+          "The embedding set ", setName, " uses the unsupported qle:precision \"",
+          precision, "\"; the MVP only supports \"", EMBEDDING_PRECISION_FP32,
+          "\".")};
+    }
+
+    std::string metricStr =
+        readStringObject(require(metricMap, setId, "qle:metric"));
+    auto metric = embeddingMetricFromString(metricStr);
+    if (!metric.has_value()) {
+      throw std::runtime_error{absl::StrCat(
+          "The embedding set ", setName, " uses the unsupported qle:metric \"",
+          metricStr, "\"; the MVP supports \"", EMBEDDING_METRIC_COSINE, "\", \"",
+          EMBEDDING_METRIC_L2, "\", \"", EMBEDDING_METRIC_SQUARED_L2, "\" and \"",
+          EMBEDDING_METRIC_DOT_PRODUCT, "\".")};
+    }
+
+    std::string model = readStringObject(require(modelMap, setId, "qle:model"));
+
+    Id normalizedId = require(normalizedMap, setId, "qle:normalized");
+    if (normalizedId.getDatatype() != Datatype::Bool) {
+      throw std::runtime_error{absl::StrCat(
+          "The embedding set ", setName,
+          " has an invalid qle:normalized; expected a boolean.")};
+    }
+    bool normalized = normalizedId.getBool();
+
+    embeddingSetRegistry_.addSet(
+        setId, EmbeddingSetConfig{dimension, std::move(precision),
+                                  metric.value(), std::move(model),
+                                  normalized});
   }
 }
 

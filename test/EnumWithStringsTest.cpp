@@ -40,7 +40,7 @@ TEST(EnumWithStrings, VocabularyTypeEnum) {
   EXPECT_THAT(all, ::testing::ElementsAre(
                        V::InMemoryUncompressed, V::OnDiskUncompressed,
                        V::InMemoryCompressed, V::OnDiskCompressed,
-                       V::OnDiskCompressedGeoSplit));
+                       V::OnDiskCompressedSplit));
 
   ad_utility::HashMap<V, size_t> h;
   for (size_t i = 0; i < 50000; ++i) {
