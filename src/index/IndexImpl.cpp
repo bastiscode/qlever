@@ -1075,7 +1075,8 @@ void IndexImpl::createFromOnDiskIndex(const std::string& onDiskBase,
   if (persistUpdatesOnDisk) {
     deltaTriples_.value().setFilenameForPersistentUpdatesAndReadFromDisk(
         onDiskBase + ".update-triples");
-    graphNameManagerStateFile_ = onDiskBase + ".allocated-graphs-state";
+    graphNameManager_.setFilenameForPersistingAndReadFromDisk(
+        onDiskBase + ".allocated-graphs-state");
   }
 
   // Assemble the embedding-set metadata from the loaded permutations (strictly
@@ -1824,18 +1825,6 @@ Index::NumNormalAndInternal IndexImpl::numDistinctCol0(
     default:
       AD_FAIL();
   }
-}
-
-// ___________________________________________________________________________
-size_t IndexImpl::getCardinality(
-    Id id, Permutation::Enum permutation,
-    const LocatedTriplesState& locatedTriplesState) const {
-  if (const auto& meta =
-          getPermutation(permutation).getMetadata(id, locatedTriplesState);
-      meta.has_value()) {
-    return meta.value().numRows_;
-  }
-  return 0;
 }
 
 // ___________________________________________________________________________
